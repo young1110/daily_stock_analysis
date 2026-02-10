@@ -15,6 +15,7 @@ import uuid
 from typing import Optional, Dict, Any
 
 from src.repositories.analysis_repo import AnalysisRepository
+from src.storage import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,17 @@ class AnalysisService:
         sniper_points = {}
         if hasattr(result, 'get_sniper_points'):
             sniper_points = result.get_sniper_points() or {}
+
+        # Sanitize stop_loss: must be below current price for long positions
+        stop_loss_display = sniper_points.get("stop_loss")
+        if stop_loss_display and getattr(result, "current_price", None) is not None:
+            stop_val = DatabaseManager._parse_sniper_value(stop_loss_display)
+            try:
+                cur = float(result.current_price)
+                if stop_val is not None and cur and stop_val >= cur:
+                    stop_loss_display = "不适用（原止损高于现价，以近期低点或持仓建议为准）"
+            except (TypeError, ValueError):
+                pass
         
         # 计算情绪标签
         sentiment_label = self._get_sentiment_label(result.sentiment_score)
@@ -139,7 +151,7 @@ class AnalysisService:
             "strategy": {
                 "ideal_buy": sniper_points.get("ideal_buy"),
                 "secondary_buy": sniper_points.get("secondary_buy"),
-                "stop_loss": sniper_points.get("stop_loss"),
+                "stop_loss": stop_loss_display,
                 "take_profit": sniper_points.get("take_profit"),
             },
             "details": {

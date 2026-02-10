@@ -1129,16 +1129,28 @@ class DatabaseManager:
 
     def _extract_sniper_points(self, result: Any) -> Dict[str, Optional[float]]:
         """
-        抽取狙击点位数据
+        抽取狙击点位数据。若止损位高于或等于当前价则记为 None（避免无效止损写入回测）。
         """
         raw_points = {}
         if hasattr(result, "get_sniper_points"):
             raw_points = result.get_sniper_points() or {}
 
+        stop_loss = self._parse_sniper_value(raw_points.get("stop_loss"))
+        current_price = getattr(result, "current_price", None)
+        if (
+            stop_loss is not None
+            and current_price is not None
+        ):
+            try:
+                if float(stop_loss) >= float(current_price):
+                    stop_loss = None
+            except (TypeError, ValueError):
+                pass
+
         return {
             "ideal_buy": self._parse_sniper_value(raw_points.get("ideal_buy")),
             "secondary_buy": self._parse_sniper_value(raw_points.get("secondary_buy")),
-            "stop_loss": self._parse_sniper_value(raw_points.get("stop_loss")),
+            "stop_loss": stop_loss,
             "take_profit": self._parse_sniper_value(raw_points.get("take_profit")),
         }
 
