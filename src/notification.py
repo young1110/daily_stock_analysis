@@ -603,7 +603,29 @@ class NotificationService:
             return ('卖出', '🔴', '卖出')
         else:
             return ('观望', '⚪', '观望')
-    
+
+    @staticmethod
+    def _has_meaningful_vol(vol_data: Any) -> bool:
+        """True if volume_analysis has at least one meaningful value (not None/N/A)."""
+        if not vol_data or not isinstance(vol_data, dict):
+            return False
+        v = vol_data.get('volume_ratio')
+        t = vol_data.get('turnover_rate')
+        empty = (None, 'N/A', 'None', '')
+        return v not in empty or t not in empty
+
+    @staticmethod
+    def _has_meaningful_chip(chip_data: Any) -> bool:
+        """True if chip_structure has at least one meaningful value (not None/N/A)."""
+        if not chip_data or not isinstance(chip_data, dict):
+            return False
+        empty = (None, 'N/A', 'None', '')
+        return (
+            chip_data.get('profit_ratio') not in empty
+            or chip_data.get('avg_cost') not in empty
+            or chip_data.get('concentration') not in empty
+        )
+
     def generate_dashboard_report(
         self,
         results: List[AnalysisResult],
@@ -778,22 +800,43 @@ class NotificationService:
                         "",
                     ])
                 
-                # 量能分析
-                if vol_data:
+                # 量能分析（仅在有有效数据时展示，避免 None/N/A 噪音）
+                if self._has_meaningful_vol(vol_data):
                     report_lines.extend([
                         f"**量能**: 量比 {vol_data.get('volume_ratio', 'N/A')} ({vol_data.get('volume_status', '')}) | 换手率 {vol_data.get('turnover_rate', 'N/A')}%",
                         f"💡 *{vol_data.get('volume_meaning', '')}*",
                         "",
                     ])
-                
-                # 筹码结构
-                if chip_data:
+
+                # 筹码结构（仅在有有效数据时展示）
+                if self._has_meaningful_chip(chip_data):
                     chip_health = chip_data.get('chip_health', 'N/A')
                     chip_emoji = "✅" if chip_health == "健康" else ("⚠️" if chip_health == "一般" else "🚨")
                     report_lines.extend([
                         f"**筹码**: 获利比例 {chip_data.get('profit_ratio', 'N/A')} | 平均成本 {chip_data.get('avg_cost', 'N/A')} | 集中度 {chip_data.get('concentration', 'N/A')} {chip_emoji}{chip_health}",
                         "",
                     ])
+
+                # 技术指标（MACD/RSI）+ 小白解读
+                macd_data = data_persp.get('macd') or {}
+                rsi_data = data_persp.get('rsi') or {}
+                tech_interp = data_persp.get('tech_interpretation') or ''
+                if macd_data or rsi_data:
+                    tech_parts = []
+                    if macd_data:
+                        tech_parts.append(
+                            f"**MACD**: DIF {macd_data.get('dif', 'N/A')} | DEA {macd_data.get('dea', 'N/A')} | "
+                            f"柱 {macd_data.get('bar', 'N/A')} | {macd_data.get('signal', '')}"
+                        )
+                    if rsi_data:
+                        tech_parts.append(
+                            f"**RSI**: 6日 {rsi_data.get('rsi_6', 'N/A')} | 12日 {rsi_data.get('rsi_12', 'N/A')} | "
+                            f"24日 {rsi_data.get('rsi_24', 'N/A')} | {rsi_data.get('signal', '')}"
+                        )
+                    report_lines.extend(tech_parts)
+                    report_lines.append("")
+                    if tech_interp:
+                        report_lines.extend([f"💡 **解读**: {tech_interp}", ""])
             
             # 舆情情报已移至顶部显示
             

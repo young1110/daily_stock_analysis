@@ -381,7 +381,7 @@ class StockAnalysisPipeline:
                 'chip_status': chip_data.get_chip_status(current_price or 0),
             }
         
-        # 添加趋势分析结果
+        # 添加趋势分析结果（含 MACD/RSI 供报告与小白解读）
         if trend_result:
             enhanced['trend_analysis'] = {
                 'trend_status': trend_result.trend_status.value,
@@ -395,6 +395,14 @@ class StockAnalysisPipeline:
                 'signal_score': trend_result.signal_score,
                 'signal_reasons': trend_result.signal_reasons,
                 'risk_factors': trend_result.risk_factors,
+                'macd_dif': getattr(trend_result, 'macd_dif', None),
+                'macd_dea': getattr(trend_result, 'macd_dea', None),
+                'macd_bar': getattr(trend_result, 'macd_bar', None),
+                'macd_signal': getattr(trend_result, 'macd_signal', '') or '',
+                'rsi_6': getattr(trend_result, 'rsi_6', None),
+                'rsi_12': getattr(trend_result, 'rsi_12', None),
+                'rsi_24': getattr(trend_result, 'rsi_24', None),
+                'rsi_signal': getattr(trend_result, 'rsi_signal', '') or '',
             }
         
         return enhanced

@@ -416,7 +416,10 @@ class GeminiAnalyzer:
                 "avg_cost": 平均成本,
                 "concentration": 筹码集中度,
                 "chip_health": "健康/一般/警惕"
-            }
+            },
+            "macd": { "可选，有数据时填 dif, dea, bar, signal" },
+            "rsi": { "可选，有数据时填 rsi_6, rsi_12, rsi_24, signal" },
+            "tech_interpretation": "有 MACD/RSI 时必填：1～3 句大白话解读，帮助小白理解指标含义及对买/卖/观望的支撑或提醒"
         },
 
         "intelligence": {
@@ -506,7 +509,8 @@ class GeminiAnalyzer:
 3. **精确狙击点**：必须给出具体价格，不说模糊的话
 4. **止损位硬性规则**：止损价必须**低于当前价**（否则一进场就触发止损无意义）。做多时用 MA20 下方或近期低点；若已空头排列/卖出建议，现价在MA20之下时，止损填「不适用」或写近期低点，禁止填高于现价的MA20
 5. **检查清单可视化**：用 ✅⚠️❌ 明确显示每项检查结果
-6. **风险优先级**：舆情中的风险点要醒目标出"""
+6. **风险优先级**：舆情中的风险点要醒目标出
+7. **无数据则省略**：若上下文中无实时量能或筹码数据，省略 volume_analysis 或 chip_structure，勿填 N/A"""
 
     def __init__(self, api_key: Optional[str] = None):
         """
@@ -1033,10 +1037,12 @@ class GeminiAnalyzer:
 | 均线形态 | {context.get('ma_status', '未知')} | 多头/空头/缠绕 |
 """
         
-        # 添加实时行情数据（量比、换手率等）
+        # 添加实时行情数据（仅当存在量比或换手率等有效数据时注入，避免 AI 输出 N/A）
         if 'realtime' in context:
             rt = context['realtime']
-            prompt += f"""
+            has_vol = rt.get('volume_ratio') not in (None, '') or rt.get('turnover_rate') not in (None, '')
+            if has_vol:
+                prompt += f"""
 ### 实时行情增强数据
 | 指标 | 数值 | 解读 |
 |------|------|------|
@@ -1049,12 +1055,20 @@ class GeminiAnalyzer:
 | 流通市值 | {self._format_amount(rt.get('circ_mv'))} | |
 | 60日涨跌幅 | {rt.get('change_60d', 'N/A')}% | 中期表现 |
 """
-        
-        # 添加筹码分布数据
+
+        # 添加筹码分布数据（仅当存在有效筹码数据时注入）
         if 'chip' in context:
             chip = context['chip']
-            profit_ratio = chip.get('profit_ratio', 0)
-            prompt += f"""
+            empty = (None, '', 0)
+            has_chip = (
+                chip.get('profit_ratio') not in empty
+                or chip.get('avg_cost') not in empty
+                or chip.get('concentration_90') not in empty
+                or chip.get('concentration_70') not in empty
+            )
+            if has_chip:
+                profit_ratio = chip.get('profit_ratio', 0)
+                prompt += f"""
 ### 筹码分布数据（效率指标）
 | 指标 | 数值 | 健康标准 |
 |------|------|----------|
@@ -1089,7 +1103,19 @@ class GeminiAnalyzer:
 **风险因素**：
 {chr(10).join('- ' + r for r in trend.get('risk_factors', ['无'])) if trend.get('risk_factors') else '- 无'}
 """
-        
+            # 技术指标 MACD/RSI（有数据时注入，便于 AI 输出并做小白解读）
+            if trend.get('macd_signal') or trend.get('rsi_signal'):
+                prompt += """
+### 技术指标（MACD / RSI）
+"""
+                if trend.get('macd_signal'):
+                    prompt += f"""| MACD | DIF {trend.get('macd_dif', 'N/A')} | DEA {trend.get('macd_dea', 'N/A')} | 柱 {trend.get('macd_bar', 'N/A')} | 信号: {trend.get('macd_signal', '')} |
+"""
+                if trend.get('rsi_signal'):
+                    prompt += f"""| RSI | 6日 {trend.get('rsi_6', 'N/A')} | 12日 {trend.get('rsi_12', 'N/A')} | 24日 {trend.get('rsi_24', 'N/A')} | 信号: {trend.get('rsi_signal', '')} |
+"""
+                prompt += "\n请在上方数据基础上，在 data_perspective 中填写 macd/rsi（若本表有数据）并**必填 tech_interpretation**：用 1～3 句大白话解读当前 MACD/RSI 含义，以及对买/卖/观望建议的支撑或提醒，方便不熟悉技术面的用户理解。\n"
+
         # 添加昨日对比数据
         if 'yesterday' in context:
             volume_change = context.get('volume_change_ratio', 'N/A')
