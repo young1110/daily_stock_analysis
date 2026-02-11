@@ -1,9 +1,9 @@
 name: 每日股票分析
 
 on:
-  # 美西下午 5 点运行：17:00 PST = UTC+8 次日 01:00 → cron 周二至周六 01:00 UTC = 周一至周五 17:00 美西
+  # 美西下午 5 点运行。17:00 PST = 次日 01:00 UTC（冬令时）。若你曾在 22:14 美西收到，说明当时实际在 06:00 UTC 触发，请确认本文件已推送到 main 且为 01:00 UTC。
   schedule:
-    - cron: '0 1 * * 2-6'   # Tue-Sat 01:00 UTC = Mon-Fri 17:00 Pacific (PST; 夏令时约为 18:00 PDT)
+    - cron: '0 1 * * 2-6'   # Tue-Sat 01:00 UTC = Mon-Fri 17:00 Pacific（PST）
   
   # 手动触发
   workflow_dispatch:
